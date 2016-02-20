@@ -6,11 +6,47 @@
 
 とりあえず動くもの：
 
-- b3m.GetVersion モデル名・バージョン番号取得
-- b3m.GetMode モード取得
-- b3m.SetMode モード設定
-- b3m.Reset サーボリセット
-- b3m.SetPosition 目標位置設定
-- b3m.GetCurrentPosition 現在位置取得
+- GetVersion モデル名・バージョン番号取得
+- Reset サーボリセット
+- GetMode モード取得
+- SetMode モード設定
+- SetPosition 目標位置設定
+- SetVelocity 目標速度設定
+- SetTorque 目標トルク設定
+- GetCurrentPosition 現在位置取得
 
+## Usage
+
+test.go 参照．
+
+```go
+package main
+
+import (
+	"./b3m"
+	"github.com/tarm/serial"
+	"log"
+)
+
+func main() {
+	s, err := serial.OpenPort(&serial.Config{Name: "COM3", Baud: 1500000})
+	if err != nil {
+		log.Fatal(err)
+	}
+	var id byte = 0
+
+	servo := b3m.GetServo(s, id)
+
+	err = servo.SetMode(b3m.ControlPosition | b3m.RunNormal)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = servo.SetPosition(500)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("ok")
+}
+```
 
