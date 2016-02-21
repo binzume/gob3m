@@ -2,8 +2,6 @@
 
 近藤科学の [B3Mシリーズ](http://kondo-robot.com/product-category/servomotor/b3m) のサーボモーターをGolangから扱うライブラリ．
 
-まだ書きかけです．
-
 とりあえず動くもの：
 
 - GetVersion モデル名・バージョン番号取得
@@ -14,8 +12,7 @@
 - SetVelocity 目標速度設定
 - SetTorque 目標トルク設定
 - GetCurrentPosition 現在位置取得
-
-- 関数が用意されてないものは ReadMem/WriteMem で直接メモリを読み書きしてください．
+- 関数が用意されてないものは ReadMem/WriteMem で直接メモリを読み書きしてください
 
 ## Usage
 
@@ -53,6 +50,13 @@ func main() {
 ```
 ## TODO
 
-マルチモード．
+- マルチモード対応
+- タイムアウト処理まともにする
+- パッケージ名変えるかも
 
+## License
+
+Copyright 2016 Kousuke Kawahira
+
+Released under the MIT license
 
