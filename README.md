@@ -1,6 +1,6 @@
 # gob3m
 
-近藤科学の [B3Mシリーズ](http://kondo-robot.com/product-category/servomotor/b3m) のサーボモーターをGolangから扱うライブラリ(の予定)．
+近藤科学の [B3Mシリーズ](http://kondo-robot.com/product-category/servomotor/b3m) のサーボモーターをGolangから扱うライブラリ．
 
 まだ書きかけです．
 
@@ -15,15 +15,17 @@
 - SetTorque 目標トルク設定
 - GetCurrentPosition 現在位置取得
 
+- 関数が用意されてないものは ReadMem/WriteMem で直接メモリを読み書きしてください．
+
 ## Usage
 
-test.go 参照．
+examples/misc.go 参照．
 
 ```go
 package main
 
 import (
-	"./b3m"
+	"github.com/binzume/gob3m/b3m"
 	"github.com/tarm/serial"
 	"log"
 )
