@@ -14,8 +14,8 @@ type CommandType byte
 
 const CmdLoad CommandType = 1
 const CmdSave CommandType = 2
-const Read CommandType = 3
-const Write CommandType = 4
+const CmdRead CommandType = 3
+const CmdWrite CommandType = 4
 const CmdReset CommandType = 5
 const CmdPosition CommandType = 6
 
@@ -72,13 +72,7 @@ func Recv(s io.Reader) (*Command, error) {
 	return cmd, nil
 }
 
-func ReadMem(s io.ReadWriter, id byte, addr int, size int, timeout int) (*Command, error) {
-	cmd := &Command{Read, 0, id, []byte{(byte)(addr), (byte)(size)}}
-	_, err := Send(s, cmd)
-	if err != nil {
-		return nil, err
-	}
-
+func Recv2(s io.Reader, timeout int) (*Command, error) {
 	type Result struct {
 		value *Command
 		err   error
@@ -97,33 +91,29 @@ func ReadMem(s io.ReadWriter, id byte, addr int, size int, timeout int) (*Comman
 	}
 }
 
+func ReadMem(s io.ReadWriter, id byte, addr int, size int, timeout int) (*Command, error) {
+	cmd := &Command{CmdRead, 0, id, []byte{(byte)(addr), (byte)(size)}}
+	_, err := Send(s, cmd)
+	if err != nil {
+		return nil, err
+	}
+	return Recv2(s, timeout)
+}
+
 func WriteMem(s io.ReadWriter, id byte, addr int, data []byte, timeout int) (*Command, error) {
 	buf := make([]byte, len(data)+2)
 	copy(buf, data)
 	buf[len(buf)-2] = (byte)(addr)
 	buf[len(buf)-1] = 1
-	cmd := &Command{Write, 0, id, buf}
+	cmd := &Command{CmdWrite, 0, id, buf}
 	_, err := Send(s, cmd)
 	if err != nil {
 		return nil, err
 	}
-
-	type Result struct {
-		value *Command
-		err   error
+	if id == 255 {
+		return cmd, nil
 	}
-	ch := make(chan Result, 1)
-	go func() {
-		ret, err := Recv(s)
-		ch <- Result{ret, err}
-	}()
-
-	select {
-	case ret := <-ch:
-		return ret.value, ret.err
-	case <-time.After(time.Millisecond * time.Duration(timeout)):
-		return nil, errors.New("timeout")
-	}
+	return Recv2(s, timeout)
 }
 
 type Servo struct {
@@ -169,6 +159,35 @@ func (s *Servo) Reset(timeAfter byte) error {
 	return err
 }
 
+
+func (s *Servo) Load() error {
+	_, err := Send(s.io, &Command{CmdLoad, 0, s.Id, []byte{}})
+	if err != nil {
+		return err
+	}
+	if s.Id != 255 {
+		_, err = Recv2(s.io, s.TimeoutMs)
+	}
+	return err
+}
+
+func (s *Servo) Save() error {
+	_, err := Send(s.io, &Command{CmdSave, 0, s.Id, []byte{}})
+	if err != nil {
+		return err
+	}
+	if s.Id != 255 {
+		_, err = Recv2(s.io, s.TimeoutMs)
+	}
+	return err
+}
+
+func (s *Servo) SetTrajectoryMode(trajectory byte) error {
+	res, err := WriteMem(s.io, s.Id, 0x29, []byte{trajectory}, s.TimeoutMs)
+	s.Status = res.Option
+	return err
+}
+
 func (s *Servo) SetPosition(pos int16) error {
 	res, err := WriteMem(s.io, s.Id, 0x2A, []byte{(byte)(pos), (byte)(pos >> 8)}, s.TimeoutMs)
 	s.Status = res.Option
@@ -193,5 +212,16 @@ func (s *Servo) SetVelocity(v int16) error {
 func (s *Servo) SetTorque(torque int16) error {
 	res, err := WriteMem(s.io, s.Id, 0x3C, []byte{(byte)(torque), (byte)(torque >> 8)}, s.TimeoutMs)
 	s.Status = res.Option
+	return err
+}
+
+func (s *Servo) SetPosition2(pos, time int16) error {
+	_, err := Send(s.io, &Command{CmdPosition, 0, s.Id, []byte{(byte)(pos), (byte)(pos >> 8), (byte)(time), (byte)(time >> 8)}})
+	if err != nil {
+		return err
+	}
+	if s.Id != 255 {
+		_, err = Recv2(s.io, s.TimeoutMs)
+	}
 	return err
 }

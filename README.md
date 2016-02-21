@@ -2,7 +2,7 @@
 
 近藤科学の [B3Mシリーズ](http://kondo-robot.com/product-category/servomotor/b3m) のサーボモーターをGolangから扱うライブラリ(の予定)．
 
-まだ書きかけです．インターフェイスも仮です．
+まだ書きかけです．
 
 とりあえず動くもの：
 
@@ -49,4 +49,8 @@ func main() {
 	log.Printf("ok")
 }
 ```
+## TODO
+
+マルチモード．
+
 
