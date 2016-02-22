@@ -19,6 +19,12 @@ const CmdWrite CommandType = 4
 const CmdReset CommandType = 5
 const CmdPosition CommandType = 6
 
+// error status
+const StatusSystemError = 1
+const StatusMotorError = 2
+const StatusUartError = 4
+const StatusCommandError = 8
+
 // servo modes
 const RunNormal byte = 0
 const RunFree byte = 2
@@ -29,6 +35,15 @@ const ControlPosition = 0
 const ControlVelocity = 4
 const ControlTorque = 8
 const ControlFForword = 12
+
+// trajectory
+type TrajectoryType byte
+
+const TrajectoryNormal TrajectoryType = 0
+const TrajectoryEven TrajectoryType = 1
+const TrajectoryThirdPoly TrajectoryType = 3
+const TrajectoryFourthPoly TrajectoryType = 4
+const TrajectoryFifthPoly TrajectoryType = 5
 
 type Command struct {
 	Cmd    CommandType
@@ -198,8 +213,8 @@ func (s *Servo) Save() error {
 	return err
 }
 
-func (s *Servo) SetTrajectoryMode(trajectory byte) error {
-	return s.WriteMem(0x29, []byte{trajectory})
+func (s *Servo) SetTrajectoryMode(trajectory TrajectoryType) error {
+	return s.WriteMem(0x29, []byte{byte(trajectory)})
 }
 
 func (s *Servo) SetPosition(pos int16) error {
