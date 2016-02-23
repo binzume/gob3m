@@ -28,6 +28,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	servo.Id = newid
 
 	err = servo.Save()
 	if err != nil {
