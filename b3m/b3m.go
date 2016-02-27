@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const DefaultTimeout = 100
+const DefaultTimeout = 200
 
 // commands
 type CommandType byte
@@ -74,7 +74,7 @@ func Recv(s io.Reader) (*Command, error) {
 		return nil, err
 	}
 	if n == 0 {
-		return nil, errors.New("timeout")
+		return nil, errors.New("timeout1")
 	}
 	sz := (int)(buf[0])
 	for i := 1; i < sz; {
@@ -90,58 +90,95 @@ func Recv(s io.Reader) (*Command, error) {
 	return cmd, nil
 }
 
-func Recv2(s io.Reader, timeout int) (*Command, error) {
-	type Result struct {
-		value *Command
-		err   error
-	}
-	ch := make(chan Result, 1)
-	go func() {
-		ret, err := Recv(s)
-		ch <- Result{ret, err}
-	}()
+type CommandResult struct {
+	value *Command
+	err   error
+}
 
+type Conn struct {
+	s io.ReadWriter
+	recv chan *CommandResult
+	close chan <-int
+}
+
+func New(s io.ReadWriter) *Conn {
+	recv := make(chan *CommandResult, 1)
+	close := make(chan int, 1)
+	go func(){
+		for {
+			ret, err := Recv(s)
+			recv <- &CommandResult{ret, err}
+			if err == io.EOF {
+				break
+			}
+		}
+	}()
+	return &Conn{s, recv, close}
+}
+
+func (c *Conn) Clear() {
+	for {
+		select {
+		case <-c.recv:
+			// do nothing
+		default:
+			return
+		}
+	}
+}
+
+func (c *Conn) Recv(timeout int) (*Command, error) {
 	select {
-	case ret := <-ch:
+	case ret := <-c.recv:
 		return ret.value, ret.err
 	case <-time.After(time.Millisecond * time.Duration(timeout)):
 		return nil, errors.New("timeout")
 	}
 }
 
-func ReadMem(s io.ReadWriter, id byte, addr int, size int, timeout int) (*Command, error) {
+func (c *Conn) Send(cmd *Command) (int, error) {
+	return Send(c.s, cmd)
+}
+
+func (c *Conn) GetServo(id byte) *Servo {
+	return &Servo{c, id, DefaultTimeout, 0}
+}
+
+func ReadMem(s *Conn, id byte, addr int, size int, timeout int) (*Command, error) {
 	cmd := &Command{CmdRead, 0, id, []byte{(byte)(addr), (byte)(size)}}
-	_, err := Send(s, cmd)
+	s.Clear()
+	_, err := s.Send(cmd)
 	if err != nil {
 		return nil, err
 	}
-	return Recv2(s, timeout)
+	return s.Recv(timeout)
 }
 
-func WriteMem(s io.ReadWriter, id byte, addr int, data []byte, timeout int) (*Command, error) {
+func WriteMem(s *Conn, id byte, addr int, data []byte, timeout int) (*Command, error) {
 	buf := make([]byte, len(data)+2)
 	copy(buf, data)
 	buf[len(buf)-2] = (byte)(addr)
 	buf[len(buf)-1] = 1
 	cmd := &Command{CmdWrite, 0, id, buf}
-	_, err := Send(s, cmd)
+	s.Clear()
+	_, err := s.Send(cmd)
 	if err != nil {
 		return nil, err
 	}
 	if id == 255 {
 		return cmd, nil
 	}
-	return Recv2(s, timeout)
+	return s.Recv(timeout)
 }
 
 type Servo struct {
-	io        io.ReadWriter // serial port
+	io        *Conn         // serial port connection
 	Id        byte          // device id
 	TimeoutMs int           // timeout for replay.
 	Status    byte          // last status
 }
 
-func GetServo(io io.ReadWriter, id byte) *Servo {
+func GetServo(io *Conn, id byte) *Servo {
 	return &Servo{io, id, DefaultTimeout, 0}
 }
 
@@ -187,28 +224,28 @@ func (s *Servo) SetMode(mode byte) error {
 
 func (s *Servo) Reset(timeAfter byte) error {
 	cmd := &Command{CmdReset, 0, s.Id, []byte{timeAfter}}
-	_, err := Send(s.io, cmd)
+	_, err := s.io.Send(cmd)
 	return err
 }
 
 func (s *Servo) Load() error {
-	_, err := Send(s.io, &Command{CmdLoad, 0, s.Id, []byte{}})
+	_, err := s.io.Send(&Command{CmdLoad, 0, s.Id, []byte{}})
 	if err != nil {
 		return err
 	}
 	if s.Id != 255 {
-		_, err = Recv2(s.io, s.TimeoutMs)
+		_, err = s.io.Recv(s.TimeoutMs)
 	}
 	return err
 }
 
 func (s *Servo) Save() error {
-	_, err := Send(s.io, &Command{CmdSave, 0, s.Id, []byte{}})
+	_, err := s.io.Send(&Command{CmdSave, 0, s.Id, []byte{}})
 	if err != nil {
 		return err
 	}
 	if s.Id != 255 {
-		_, err = Recv2(s.io, s.TimeoutMs)
+		_, err = s.io.Recv(s.TimeoutMs)
 	}
 	return err
 }
@@ -238,12 +275,12 @@ func (s *Servo) SetTorque(torque int16) error {
 }
 
 func (s *Servo) SetPosition2(pos, time int16) error {
-	_, err := Send(s.io, &Command{CmdPosition, 0, s.Id, []byte{(byte)(pos), (byte)(pos >> 8), (byte)(time), (byte)(time >> 8)}})
+	_, err := s.io.Send(&Command{CmdPosition, 0, s.Id, []byte{(byte)(pos), (byte)(pos >> 8), (byte)(time), (byte)(time >> 8)}})
 	if err != nil {
 		return err
 	}
 	if s.Id != 255 {
-		_, err = Recv2(s.io, s.TimeoutMs)
+		_, err = s.io.Recv(s.TimeoutMs)
 	}
 	return err
 }

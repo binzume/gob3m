@@ -4,7 +4,6 @@ import (
 	"github.com/binzume/gob3m/b3m"
 	"github.com/tarm/serial"
 	"log"
-	"time"
 	"flag"
 )
 
@@ -12,15 +11,16 @@ func main() {
 	var opt_port = flag.String("port", "COM1", "Serial port")
 	flag.Parse()
 
-	s, err := serial.OpenPort(&serial.Config{Name: *opt_port, Baud: 1500000, ReadTimeout: 100 * time.Millisecond})
+	s, err := serial.OpenPort(&serial.Config{Name: *opt_port, Baud: 1500000})
 	if err != nil {
 		log.Fatal(err)
 	}
+	conn := b3m.New(s)
 
 	// scan all servo
 	found := 0
-	for id := 0; id < 256; id ++{
-		servo := b3m.GetServo(s, (byte)(id))
+	for id := 0; id < 255; id ++{
+		servo := conn.GetServo((byte)(id))
 		model, version, err := servo.GetVersion()
 		if err != nil {
 			log.Printf("id:%v %v", id, err)

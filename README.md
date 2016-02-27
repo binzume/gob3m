@@ -33,8 +33,9 @@ func main() {
 		log.Fatal(err)
 	}
 	var id byte = 0
+	conn := b3m.New(s)
 
-	servo := b3m.GetServo(s, id)
+	servo := conn.GetServo(id)
 
 	err = servo.SetMode(b3m.ControlPosition | b3m.RunNormal)
 	if err != nil {
@@ -51,7 +52,6 @@ func main() {
 ## TODO
 
 - マルチモード対応
-- タイムアウト処理まともにする
 - パッケージ名変えるかも
 
 ## License
