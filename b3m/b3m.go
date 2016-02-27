@@ -54,8 +54,8 @@ type Command struct {
 
 func Send(s io.Writer, c *Command) (int, error) {
 	buf := make([]byte, len(c.Data)+5)
-	buf[0] = (byte)(len(c.Data) + 5)
-	buf[1] = (byte)(c.Cmd)
+	buf[0] = byte(len(c.Data) + 5)
+	buf[1] = byte(c.Cmd)
 	buf[2] = c.Option
 	buf[3] = c.Id
 	copy(buf[4:], c.Data)
@@ -76,7 +76,7 @@ func Recv(s io.Reader) (*Command, error) {
 	if n == 0 {
 		return nil, errors.New("timeout1")
 	}
-	sz := (int)(buf[0])
+	sz := int(buf[0])
 	for i := 1; i < sz; {
 		n, err = s.Read(buf[i:])
 		if err != nil {
@@ -141,11 +141,11 @@ func (c *Conn) Send(cmd *Command) (int, error) {
 }
 
 func (c *Conn) GetServo(id byte) *Servo {
-	return &Servo{c, id, DefaultTimeout, 0}
+	return &Servo{c, id, DefaultTimeout, 0, id == 255}
 }
 
 func ReadMem(s *Conn, id byte, addr int, size int, timeout int) (*Command, error) {
-	cmd := &Command{CmdRead, 0, id, []byte{(byte)(addr), (byte)(size)}}
+	cmd := &Command{CmdRead, 0, id, []byte{byte(addr), byte(size)}}
 	s.Clear()
 	_, err := s.Send(cmd)
 	if err != nil {
@@ -154,10 +154,10 @@ func ReadMem(s *Conn, id byte, addr int, size int, timeout int) (*Command, error
 	return s.Recv(timeout)
 }
 
-func WriteMem(s *Conn, id byte, addr int, data []byte, timeout int) (*Command, error) {
+func WriteMem(s *Conn, id byte, addr int, data []byte, timeout int, mute bool) (*Command, error) {
 	buf := make([]byte, len(data)+2)
 	copy(buf, data)
-	buf[len(buf)-2] = (byte)(addr)
+	buf[len(buf)-2] = byte(addr)
 	buf[len(buf)-1] = 1
 	cmd := &Command{CmdWrite, 0, id, buf}
 	s.Clear()
@@ -165,7 +165,7 @@ func WriteMem(s *Conn, id byte, addr int, data []byte, timeout int) (*Command, e
 	if err != nil {
 		return nil, err
 	}
-	if id == 255 {
+	if mute {
 		return cmd, nil
 	}
 	return s.Recv(timeout)
@@ -176,10 +176,7 @@ type Servo struct {
 	Id        byte          // device id
 	TimeoutMs int           // timeout for replay.
 	Status    byte          // last status
-}
-
-func GetServo(io *Conn, id byte) *Servo {
-	return &Servo{io, id, DefaultTimeout, 0}
+	Mute      bool          // clone mode or Id=255
 }
 
 func (s *Servo) ReadMem(addr int, size int) ([]byte, error) {
@@ -192,12 +189,29 @@ func (s *Servo) ReadMem(addr int, size int) ([]byte, error) {
 }
 
 func (s *Servo) WriteMem(addr int, data []byte) error {
-	res, err := WriteMem(s.io, s.Id, addr, data, s.TimeoutMs)
+	res, err := WriteMem(s.io, s.Id, addr, data, s.TimeoutMs, s.Mute)
 	if err != nil {
 		return err
 	}
 	s.Status = res.Option
 	return nil
+}
+
+func (s *Servo) Reset(timeAfter byte) error {
+	cmd := &Command{CmdReset, 0, s.Id, []byte{timeAfter}}
+	_, err := s.io.Send(cmd)
+	return err
+}
+
+func (s *Servo) Load() error {
+	_, err := s.io.Send(&Command{CmdLoad, 0, s.Id, []byte{}})
+	if err != nil {
+		return err
+	}
+	if !s.Mute {
+		_, err = s.io.Recv(s.TimeoutMs)
+	}
+	return err
 }
 
 func (s *Servo) GetVersion() (model string, version string, err error) {
@@ -208,6 +222,17 @@ func (s *Servo) GetVersion() (model string, version string, err error) {
 	model = fmt.Sprintf("B3M-%c%c-%v%v%v-%c", buf[7], buf[6], buf[3], buf[2], buf[1], buf[0])
 	version = fmt.Sprintf("%v.%v.%v.%v", buf[11], buf[10], buf[9], buf[8])
 	return
+}
+
+func (s *Servo) Save() error {
+	_, err := s.io.Send(&Command{CmdSave, 0, s.Id, []byte{}})
+	if err != nil {
+		return err
+	}
+	if !s.Mute {
+		_, err = s.io.Recv(s.TimeoutMs)
+	}
+	return err
 }
 
 func (s *Servo) GetMode() (byte, error) {
@@ -222,40 +247,12 @@ func (s *Servo) SetMode(mode byte) error {
 	return s.WriteMem(0x28, []byte{mode})
 }
 
-func (s *Servo) Reset(timeAfter byte) error {
-	cmd := &Command{CmdReset, 0, s.Id, []byte{timeAfter}}
-	_, err := s.io.Send(cmd)
-	return err
-}
-
-func (s *Servo) Load() error {
-	_, err := s.io.Send(&Command{CmdLoad, 0, s.Id, []byte{}})
-	if err != nil {
-		return err
-	}
-	if s.Id != 255 {
-		_, err = s.io.Recv(s.TimeoutMs)
-	}
-	return err
-}
-
-func (s *Servo) Save() error {
-	_, err := s.io.Send(&Command{CmdSave, 0, s.Id, []byte{}})
-	if err != nil {
-		return err
-	}
-	if s.Id != 255 {
-		_, err = s.io.Recv(s.TimeoutMs)
-	}
-	return err
-}
-
 func (s *Servo) SetTrajectoryMode(trajectory TrajectoryType) error {
 	return s.WriteMem(0x29, []byte{byte(trajectory)})
 }
 
 func (s *Servo) SetPosition(pos int16) error {
-	return s.WriteMem(0x2A, []byte{(byte)(pos), (byte)(pos >> 8)})
+	return s.WriteMem(0x2A, []byte{byte(pos), byte(pos >> 8)})
 }
 
 func (s *Servo) GetCurrentPosition() (int16, error) {
@@ -267,19 +264,19 @@ func (s *Servo) GetCurrentPosition() (int16, error) {
 }
 
 func (s *Servo) SetVelocity(v int16) error {
-	return s.WriteMem(0x30, []byte{(byte)(v), (byte)(v >> 8)})
+	return s.WriteMem(0x30, []byte{byte(v), byte(v >> 8)})
 }
 
 func (s *Servo) SetTorque(torque int16) error {
-	return s.WriteMem(0x3C, []byte{(byte)(torque), (byte)(torque >> 8)})
+	return s.WriteMem(0x3C, []byte{byte(torque), byte(torque >> 8)})
 }
 
 func (s *Servo) SetPosition2(pos, time int16) error {
-	_, err := s.io.Send(&Command{CmdPosition, 0, s.Id, []byte{(byte)(pos), (byte)(pos >> 8), (byte)(time), (byte)(time >> 8)}})
+	_, err := s.io.Send(&Command{CmdPosition, 0, s.Id, []byte{byte(pos), byte(pos >> 8), byte(time), byte(time >> 8)}})
 	if err != nil {
 		return err
 	}
-	if s.Id != 255 {
+	if !s.Mute {
 		_, err = s.io.Recv(s.TimeoutMs)
 	}
 	return err
