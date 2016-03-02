@@ -21,6 +21,7 @@ func main() {
 	found := 0
 	for id := 0; id < 255; id ++{
 		servo := conn.GetServo((byte)(id))
+		servo.TimeoutMs = 50
 		model, version, err := servo.GetVersion()
 		if err != nil {
 			log.Printf("id:%v %v", id, err)
