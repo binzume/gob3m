@@ -53,7 +53,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	err = servo.SetPosition(0)
+	pos, err := servo.GetCurrentPosition()
+
+	err = servo.SetPosition(pos)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -66,7 +68,8 @@ func main() {
 		if err != nil {
 			log.Printf("error %v", err)
 		} else {
-			log.Printf("Motor: T:%v\tI:%v(A)\tV:%v(V)\tD:%v", ms.Temperature, ms.Current, ms.Voltage, ms.DutyRatio)
+			pos, _ = servo.GetCurrentPosition()
+			log.Printf("Motor: T:%v\tI:%v(A)\tV:%v(V)\tD:%v", ms.Temperature, ms.Current, ms.Voltage, ms.DutyRatio, pos)
 		}
 		time.Sleep(20 * time.Millisecond)
 		select {

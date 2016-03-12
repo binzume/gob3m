@@ -77,6 +77,9 @@ func Recv(s io.Reader) (*Command, error) {
 		return nil, errors.New("timeout1")
 	}
 	sz := int(buf[0])
+	if sz < 5 {
+		return nil, errors.New("invalid message")
+	}
 	for i := 1; i < sz; {
 		n, err = s.Read(buf[i:])
 		if err != nil {
